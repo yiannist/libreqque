@@ -24,7 +24,7 @@ void do_handle_req(struct req *r) {
 void loop() {
     while (1) {
         struct req *r;
-        
+
         r = g_async_queue_pop(req_queue);
         g_thread_new("worker", (GThreadFunc) do_handle_req, r);
     }
@@ -65,14 +65,13 @@ void print(int x) {
 
 int main(int argc, char **argv) {
     int args[2] = {10, 5};
-    handler_t *handlers = malloc(2 * sizeof(handler_t));
-    handlers[0] = (handler_t) &add;
-    handlers[1] = (handler_t) &sub;
+    handler_t handlers[2] = {(handler_t) &add, (handler_t) &sub};
 
     reqque_init(handlers);
 
     handle_req((void *) args, 0, (callback_t) &print);
     handle_req((void *) args, 1, (callback_t) &print);
+
     g_thread_join(consumer_thread);
 
     return 0;
