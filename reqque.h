@@ -1,16 +1,23 @@
-#ifndef QUEUE_H
-#define QUEUE_H
-
-/* enum req_state { */
-/*     SUBMITTED, */
-/*     PROCESSING, */
-/*     COMPLETED */
-/* }; */
+#ifndef REQQUE_H
+#define REQQUE_H
 
 typedef void  (*callback_t)(void *arg);
 typedef void *(*handler_t)(void *arg);
 
-int reqque_init(handler_t *handlers);
-int handle_req(void *arg, int handler_idx, callback_t cb);
+struct reqque_ctx_t {
+    handler_t *handlers;
+    void *queue;
+};
 
-#endif /* QUEUE_H */
+struct req {
+    struct reqque_ctx_t *reqque_ctx;
+    void *handler_arg;
+    int handler_idx;
+    callback_t cb;
+};
+
+struct reqque_ctx_t *reqque_init(handler_t *handlers);
+int submit_req(struct reqque_ctx_t *ctx, void *handler_arg, int handler_idx,
+               callback_t cb);
+
+#endif /* REQQUE_H */

@@ -1,78 +1,79 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <glib.h>
 #include "reqque.h"
+#include "queue.h"
 
-struct req {
-    void *handler_arg;
-    int handler_idx;
-    callback_t cb;
-};
+void do_handle_req(void *arg, void *data) {
+    struct req *r = (struct req *) arg;
+    struct reqque_ctx_t *ctx = r->reqque_ctx;
+    handler_t handler = ctx->handlers[r->handler_idx];
 
-static GAsyncQueue* req_queue;
-static handler_t *req_handlers;
-static GThread *consumer_thread;
-
-void do_handle_req(struct req *r) {
-    void *res;
-
-    handler_t handler = req_handlers[r->handler_idx];
-    res = handler(r->handler_arg);
-    r->cb(res);
+    handler(r);
 }
 
-void loop() {
-    while (1) {
-        struct req *r;
+struct reqque_ctx_t *reqque_init(handler_t *handlers) {
+    struct reqque_ctx_t *reqque_ctx = malloc(sizeof(struct reqque_ctx_t));
 
-        r = g_async_queue_pop(req_queue);
-        g_thread_new("worker", (GThreadFunc) do_handle_req, r);
-    }
+    reqque_ctx->handlers = handlers;
+    reqque_ctx->queue = init_queue(&do_handle_req);
+
+    return reqque_ctx;
 }
 
-int reqque_init(handler_t *handlers) {
-    req_handlers = handlers;
-    req_queue = g_async_queue_new();
-    consumer_thread = g_thread_new("handler", (GThreadFunc) loop, NULL);
-
-    return 0;
-}
-
-int handle_req(void *arg, int idx, callback_t cb) {
+int submit_req(struct reqque_ctx_t *ctx, void *arg, int idx, callback_t cb) {
     struct req *r = malloc(sizeof(struct req));
 
+    r->reqque_ctx = ctx;
     r->handler_arg = arg;
     r->handler_idx = idx;
     r->cb = cb;
 
-    g_async_queue_push(req_queue, r);
+    enqueue(ctx->queue, r);
 
     return 0;
 }
 
 /* Testing functions */
-int add(int *args) {
-    return (args[0] + args[1]);
+void add(void *arg) {
+    struct req *r = (struct req *) arg;
+    int *args = (int *) r->handler_arg;
+    int a = args[0];
+    int b = args[1];
+    int res = a + b;
+
+    r->cb((void *) &res);
 }
 
-int sub(int *args) {
-    return (args[0] - args[1]);
+void sub(void *arg) {
+    struct req *r = (struct req*) arg;
+    int *args = (int *) r->handler_arg;
+    int a = args[0];
+    int b = args[1];
+    int res = a - b;
+
+    r->cb((void *) &res);
 }
 
-void print(int x) {
-    printf("Great! Res: %d\n", x);
+void print(void *arg) {
+    int *x = (int *) arg;
+    printf("Great! Res: %d.\n", *x);
 }
+
+#define ADD 0
+#define SUB 1
 
 int main(int argc, char **argv) {
     int args[2] = {10, 5};
     handler_t handlers[2] = {(handler_t) &add, (handler_t) &sub};
+    struct reqque_ctx_t *reqque_ctx;
 
-    reqque_init(handlers);
+    reqque_ctx = reqque_init(handlers);
 
-    handle_req((void *) args, 0, (callback_t) &print);
-    handle_req((void *) args, 1, (callback_t) &print);
+    submit_req(reqque_ctx, (void *) args, ADD, (callback_t) &print);
+    submit_req(reqque_ctx, (void *) args, SUB, (callback_t) &print);
+    submit_req(reqque_ctx, (void *) args, ADD, (callback_t) &print);
 
-    g_thread_join(consumer_thread);
+    sleep(1);
 
     return 0;
 }
